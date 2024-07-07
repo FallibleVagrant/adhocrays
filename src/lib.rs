@@ -1,6 +1,6 @@
 #![allow(non_camel_case_types)]
 
-use libc::{c_int, c_float};
+use libc::{c_int, c_float, c_void};
 use std::ffi::CString;
 use std::ops::{Add, Sub, Mul, Div, AddAssign, SubAssign, MulAssign, DivAssign};
 
@@ -16,6 +16,59 @@ struct CColor {
 struct CVector2 {
     x: f32,
     y: f32,
+}
+
+/*================================
+       Font stuff, internals.
+  ================================*/
+
+#[repr(C)]
+#[derive(Clone)]
+struct CTexture {
+    id: u32,
+    width: i32,
+    height: i32,
+    mipmaps: i32,
+    format: i32,
+}
+
+type CTexture2D = CTexture;
+
+#[repr(C)]
+struct CRectangle {
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+}
+
+#[repr(C)]
+struct CImage {
+    data: c_void,
+    width: i32,
+    height: i32,
+    mipmaps: i32,
+    format: i32,
+}
+
+#[repr(C)]
+struct CGlyphInfo {
+    value: i32,
+    offset_x: i32,
+    offset_y: i32,
+    advance_x: i32,
+    image: CImage,
+}
+
+#[repr(C)]
+#[derive(Clone)]
+struct CFont {
+    base_size: i32,
+    glyph_count: i32,
+    glyph_padding: i32,
+    texture: CTexture2D,
+    recs: *mut CRectangle,
+    glyphs: *mut CGlyphInfo,
 }
 
 #[link(name = "raylib", kind = "static")]
@@ -38,11 +91,17 @@ extern {
     fn GetFPS() -> c_int;
     fn DrawLineEx(start_pos: CVector2, end_pos: CVector2, thickness: c_float, color: CColor);
     fn IsMouseButtonPressed(button: c_int) -> bool;
+    fn GetFontDefault() -> CFont;
+    fn SetTextLineSpacing(spacing: c_int);
+    fn MeasureTextEx(font: CFont, text: *const i8, font_size: c_float, spacing: c_float) -> CVector2;
+    fn GetCharPressed() -> c_int;
+    fn IsKeyPressed(key: c_int) -> bool;
+    fn IsKeyPressedRepeat(key: c_int) -> bool;
 }
 
 /*==========================================
- *          The public interface.
- ===========================================*/
+             The public interface.
+  ==========================================*/
 
 #[derive(Clone, Copy)]
 pub struct Color {
@@ -369,6 +428,50 @@ pub fn is_key_down(key: Key) -> bool {
     return flag;
 }
 
+pub fn get_char_pressed() -> Option<char> {
+    let result;
+
+    unsafe {
+        result = GetCharPressed();
+    }
+
+    match result {
+        0 => {
+            return None;
+        },
+        c => {
+            // Larger than all ascii.
+            if c > 127 {
+                return None;
+            }
+
+            return Some(c as u8 as char);
+        },
+    };
+}
+
+pub fn is_key_pressed(key: Key) -> bool {
+    let result;
+    let converted_key = key.to_key_code();
+
+    unsafe {
+        result = IsKeyPressed(converted_key);
+    }
+
+    return result;
+}
+
+pub fn is_key_pressed_repeat(key: Key) -> bool {
+    let result;
+    let converted_key = key.to_key_code();
+
+    unsafe {
+        result = IsKeyPressedRepeat(converted_key);
+    }
+
+    return result;
+}
+
 #[derive(Debug)]
 pub enum Key {
     NULL,                       // Key: NULL, used for no key pressed
@@ -688,4 +791,44 @@ pub fn get_fps() -> i32 {
     return result;
 }
 
+/*===================================
+             Font stuff.
+=====================================*/
 
+pub struct Font {
+    inner: CFont,
+}
+
+impl Font {
+    fn to_cfont(&self) -> CFont {
+        return self.inner.clone();
+    }
+}
+
+pub fn get_default_font() -> Font {
+    let result: CFont;
+
+    unsafe {
+        result = GetFontDefault();
+    }
+
+    return Font { inner: result };
+}
+
+pub fn set_text_line_spacing(spacing: i32) {
+    unsafe {
+        SetTextLineSpacing(spacing as c_int);
+    }
+}
+
+pub fn measure_text_ex(font: Font, text: &str, font_size: f32, spacing: f32) -> Vector2 {
+    let converted_text = CString::new(text).expect("Failed to create CString.");
+    let text_pointer = converted_text.as_ptr();
+    let result: CVector2;
+
+    unsafe {
+        result = MeasureTextEx(font.to_cfont(), text_pointer, font_size as c_float, spacing as c_float);
+    }
+
+    return Vector2 { x: result.x, y: result.y };
+}
