@@ -2,6 +2,7 @@
 
 > [!WARNING]
 > This is a hobby project. New features and maintenance to be done at my whimsy.
+> Moreover, development has moved to Codeberg. [https://codeberg.org/FallibleVagrant/adhocrays](https://codeberg.org/FallibleVagrant/adhocrays)
 
 [Raylib](https://github.com/raysan5/raylib) bindings in Rust, thrown together for my own projects.
 It is recommended that you make your own bindings or use something that is properly maintained.
